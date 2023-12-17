@@ -1,4 +1,4 @@
-const { post, user, likes, comments } = require("../models");
+const { post, user, likes, comments,sequelize } = require("../models");
 const { responseMessage, responseData } = require("../utils/responseHandle");
 
 async function posted(req, res) {
@@ -61,8 +61,8 @@ async function posted(req, res) {
 }
 
 async function getAllPost(req, res) {
-  const page = req.query.page || 1; // Mendapatkan nomor halaman dari query parameter
-  const pageSize = 10; // Jumlah postingan per halaman
+  const page = req.query.page || 1;
+  const pageSize = 10;
   try {
     const { count, rows: postingans } = await post.findAndCountAll({
       include: [
@@ -81,15 +81,47 @@ async function getAllPost(req, res) {
 
     const totalPages = Math.ceil(count / pageSize);
 
+    const postIds = postingans.map((postingan) => postingan.id);
+
+    const likesCount = await likes.findAll({
+      attributes: [
+        "id_post",
+        [sequelize.fn("COUNT", sequelize.literal("DISTINCT liked_by_user")), "likeCount"],
+      ],
+      where: {
+        id_post: postIds,
+      },
+      group: ["id_post"],
+    });
+
+    const commentCount = await comments.count({
+      where: {
+        id_post: postIds,
+      },
+    });
+
+    const likesMap = {};
+    // const commentMap = {};
+
+    likesCount.forEach((like) => {
+      likesMap[like.id_post] = like.dataValues.likeCount;
+    });
+
+    // commentCount.forEach((comment) => {
+    //   commentMap[comment.id_post] = comment;
+    // });
+
     const formattedPostings = postingans.map((postingan) => {
+      const idPost = postingan.id;
       return {
-        idPost: postingan.id,
+        idPost,
         createBy: postingan.createdByUser.name,
         postPicture: postingan.image_url,
         description: postingan.body,
         category: postingan.categories,
         subCatergory: postingan.sub_categories,
-        likes: postingan.likes,
+        likes: likesMap[idPost] || 0, 
+        comment: commentCount|| 0, 
         following: postingan.following === "true",
         saved: postingan.saved === "true",
         summary: postingan.summary === "true",
@@ -103,16 +135,12 @@ async function getAllPost(req, res) {
       totalPosts: count,
     };
 
-    responseData(
-      res,
-      200,
-      { posts: formattedPostings, pagination: paginationInfo },
-      "Success"
-    );
+    responseData(res, 200, { posts: formattedPostings, pagination: paginationInfo }, "Success");
   } catch (error) {
     responseMessage(res, 500, `Internal server error ${error}`);
   }
 }
+
 
 async function getPostById(req, res) {
   try {
@@ -162,7 +190,6 @@ async function likePost(req, res) {
     if (isAlreadyLike) {
       return responseMessage(res, 400, "already like this post");
     }
-  
     await likes.create({
       id_post: post_id,
       liked_by_user: liked_by,
