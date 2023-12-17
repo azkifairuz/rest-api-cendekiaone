@@ -6,7 +6,9 @@ const { responseMessage, responseData } = require("../utils/responseHandle");
 async function register(req, res) {
   try {
     const { name, username, email, password } = req.body;
+
     const existingEmail = await auth.findOne({ where: { email: email } });
+    
     if (existingEmail) {
       return responseMessage(res, 400, "Email already exists", "false");
     }

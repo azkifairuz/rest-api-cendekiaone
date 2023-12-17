@@ -1,59 +1,123 @@
-const { post, user, likes, comments,sequelize } = require("../models");
+const { post, user, likes, comments, sequelize } = require("../models");
 const { responseMessage, responseData } = require("../utils/responseHandle");
+const { Storage } = require("@google-cloud/storage");
+const path = require("path");
+
+const storage = new Storage({
+  keyFilename: path.join(
+    __dirname,
+    "../usman-project-404306-f6a7db49c320.json"
+  ),
+  projectId: "usman-project-404306",
+});
+
+const bucket = storage.bucket("cendikiaone");
 
 async function posted(req, res) {
   try {
-    const {
-      post_title,
-      post_body,
-      id_user,
-      image_url,
-      categories,
-      sub_categories,
-    } = req.body;
+    const { post_title, post_body, id_user, categories, sub_categories } =
+      req.body;
 
     if (!id_user) {
       return responseMessage(res, 201, "Cannot create post before login", true);
     }
+    // if (!req.file) {
+    //   const postReturn = await post.create({
+    //     post_title,
+    //     post_body,
+    //     id_user,
+    //     image_url,
+    //     categories,
+    //     sub_categories,
+    //   });
 
-    const postReturn = await post.create({
-      post_title,
-      post_body,
-      id_user,
-      image_url,
-      categories,
-      sub_categories,
-    });
+    //   const createdPost = await post.findByPk(postReturn.id, {
+    //     include: [
+    //       {
+    //         model: user,
+    //         attributes: ["username"],
+    //         as: "createdByUser",
+    //       },
+    //     ],
+    //   });
 
-    const createdPost = await post.findByPk(postReturn.id, {
-      include: [
-        {
-          model: user,
-          attributes: ["username"],
-          as: "createdByUser",
-        },
-      ],
-    });
+    //   const formattedResponse = {
+    //     status: "Post Created",
+    //     data: {
+    //       idPost: createdPost.id,
+    //       createBy: createdPost.createdByUser.username,
+    //       postPicture: createdPost.image_url,
+    //       description: createdPost.post_body,
+    //       category: createdPost.categories,
+    //       subCatergory: createdPost.sub_categories,
+    //       likes: 0,
+    //       comments: 0,
+    //       following: false,
+    //       saved: false,
+    //       summary: false,
+    //       createdAt: createdPost.createdAt,
+    //     },
+    //   };
+    //   return responseMessage(res, 201, formattedResponse, false);
+    // }
 
-    // Format respons sesuai dengan kebutuhan
-    const formattedResponse = {
-      status: "Post Created",
-      data: {
-        idPost: createdPost.id,
-        createBy: createdPost.createdByUser.username,
-        postPicture: createdPost.image_url,
-        description: createdPost.post_body,
-        category: createdPost.categories,
-        subCatergory: createdPost.sub_categories,
-        likes: 0,
-        following: false,
-        saved: false,
-        summary: false,
-        createdAt: createdPost.createdAt,
+    const image = req.file;
+    const imageName = `${Date.now()}_${image.originalname}`;
+
+    const fileStream = bucket.file(imageName).createWriteStream({
+      metadata: {
+        contentType: image.mimetype,
       },
-    };
+    });
 
-    responseMessage(res, 201, formattedResponse, false);
+    fileStream.on("error", (err) => {
+      console.error(err);
+      responseMessage(res, 500, "Failed to upload  image", true);
+    });
+
+    fileStream.on("finish", async () => {
+      const image_url = `https://storage.googleapis.com/${bucket.name}/${imageName}`;
+
+      const postReturn = await post.create({
+        post_title,
+        post_body,
+        id_user,
+        image_url,
+        categories,
+        sub_categories,
+      });
+
+      const createdPost = await post.findByPk(postReturn.id, {
+        include: [
+          {
+            model: user,
+            attributes: ["username"],
+            as: "createdByUser",
+          },
+        ],
+      });
+
+      const formattedResponse = {
+        status: "Post Created",
+        data: {
+          idPost: createdPost.id,
+          createBy: createdPost.createdByUser.username,
+          postPicture: createdPost.image_url,
+          description: createdPost.post_body,
+          category: createdPost.categories,
+          subCatergory: createdPost.sub_categories,
+          likes: 0,
+          comments: 0,
+          following: false,
+          saved: false,
+          summary: false,
+          createdAt: createdPost.createdAt,
+        },
+      };
+
+     responseMessage(res, 201, formattedResponse, false);
+    });
+    fileStream.end(image.buffer);
   } catch (error) {
     console.error(error);
     responseMessage(res, 500, "Internal server error");
@@ -86,7 +150,10 @@ async function getAllPost(req, res) {
     const likesCount = await likes.findAll({
       attributes: [
         "id_post",
-        [sequelize.fn("COUNT", sequelize.literal("DISTINCT liked_by_user")), "likeCount"],
+        [
+          sequelize.fn("COUNT", sequelize.literal("DISTINCT liked_by_user")),
+          "likeCount",
+        ],
       ],
       where: {
         id_post: postIds,
@@ -101,15 +168,10 @@ async function getAllPost(req, res) {
     });
 
     const likesMap = {};
-    // const commentMap = {};
 
     likesCount.forEach((like) => {
       likesMap[like.id_post] = like.dataValues.likeCount;
     });
-
-    // commentCount.forEach((comment) => {
-    //   commentMap[comment.id_post] = comment;
-    // });
 
     const formattedPostings = postingans.map((postingan) => {
       const idPost = postingan.id;
@@ -120,8 +182,8 @@ async function getAllPost(req, res) {
         description: postingan.body,
         category: postingan.categories,
         subCatergory: postingan.sub_categories,
-        likes: likesMap[idPost] || 0, 
-        comment: commentCount|| 0, 
+        likes: likesMap[idPost] || 0,
+        comment: commentCount || 0,
         following: postingan.following === "true",
         saved: postingan.saved === "true",
         summary: postingan.summary === "true",
@@ -135,12 +197,16 @@ async function getAllPost(req, res) {
       totalPosts: count,
     };
 
-    responseData(res, 200, { posts: formattedPostings, pagination: paginationInfo }, "Success");
+    responseData(
+      res,
+      200,
+      { posts: formattedPostings, pagination: paginationInfo },
+      "Success"
+    );
   } catch (error) {
     responseMessage(res, 500, `Internal server error ${error}`);
   }
 }
-
 
 async function getPostById(req, res) {
   try {
@@ -158,7 +224,19 @@ async function getPostById(req, res) {
       },
       where: { id: detail },
     });
+    const postIds = postingans.map((postingan) => postingan.id);
 
+    const likeCount = await likes.count({
+      where: {
+        id_post: postIds,
+      },
+    });
+
+    const commentCount = await comments.count({
+      where: {
+        id_post: postIds,
+      },
+    });
     const formattedPostings = {
       idPost: postingans.id,
       createBy: postingans.createdByUser.name,
@@ -166,7 +244,8 @@ async function getPostById(req, res) {
       description: postingans.body,
       category: postingans.categories,
       subCatergory: postingans.sub_categories,
-      likes: postingans.likes,
+      likes: likeCount || 0,
+      comments: commentCount || 0,
       following: postingans.following === "true",
       saved: postingans.saved === "true",
       summary: postingans.summary === "true",
@@ -186,17 +265,18 @@ async function likePost(req, res) {
     const isAlreadyLike = await likes.findOne({
       where: [{ id_post: post_id }, { liked_by_user: liked_by }],
     });
-  
+
     if (isAlreadyLike) {
       return responseMessage(res, 400, "already like this post");
     }
+
     await likes.create({
       id_post: post_id,
       liked_by_user: liked_by,
     });
+
     return responseMessage(res, 200, "successfully liked this post");
   } catch (error) {
-
     return responseMessage(res, 500, `${error}`);
   }
 }
@@ -204,11 +284,20 @@ async function likePost(req, res) {
 async function commentPost(req, res) {
   const { post_id, comment_by, comment_body } = req.body;
   try {
+    if (!post_id) {
+      return responseMessage(res, 400, "post cannot be null");
+    }
+
     const commentReturn = await comments.create({
       id_post: post_id,
-      comment_by_user:comment_by,
-      comment_body:comment_body,
+      comment_by_user: comment_by,
+      comment_body: comment_body,
     });
+
+    if (!commentReturn) {
+      return responseMessage(res, 500, "post not found");
+    }
+
     const createdComment = await comments.findByPk(commentReturn.id, {
       include: [
         {
@@ -218,12 +307,36 @@ async function commentPost(req, res) {
         },
       ],
     });
-    return responseData(res, 200, {
-      username:createdComment.commentByUser.username,
-      comments:createdComment.comment_body
-    },"success");
+
+    return responseData(
+      res,
+      200,
+      {
+        username: createdComment.commentByUser.username,
+        comments: createdComment.comment_body,
+      },
+      "success"
+    );
   } catch (error) {
     return responseMessage(res, 500, `${error}`);
+  }
+}
+
+async function deletePost(req, res) {
+  const { post_id } = req.params;
+
+  try {
+    const deleteReturn = await post.destroy({
+      where: {
+        id: post_id,
+      },
+    });
+    if (!deleteReturn) {
+      responseMessage(res, 404, "post not found", false);
+    }
+    responseMessage(res, 200, "delete post success", false);
+  } catch (error) {
+    responseMessage(res, 200, `${error}`, true);
   }
 }
 
@@ -233,4 +346,5 @@ module.exports = {
   getPostById,
   likePost,
   commentPost,
+  deletePost,
 };

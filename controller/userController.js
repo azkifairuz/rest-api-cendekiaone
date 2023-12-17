@@ -1,15 +1,14 @@
 const { user, following, follower, sequelize, post } = require("../models");
 const { responseMessage, responseData } = require("../utils/responseHandle");
 const { Storage } = require("@google-cloud/storage");
-
+const path = require('path')
 // Initialize Google Cloud Storage
 const storage = new Storage({
-  projectId: "your-project-id",
-  keyFilename: "path/to/your/keyfile.json",
+  keyFilename: path.join(__dirname,'../usman-project-404306-f6a7db49c320.json'),
+  projectId: "usman-project-404306",
 });
 
-// Create a bucket reference
-const bucket = storage.bucket("your-bucket-name");
+const bucket = storage.bucket("cendikiaone");
 
 async function getUser(req, res) {
   try {
@@ -68,17 +67,19 @@ async function getUserById(req, res) {
 async function updateUser(req, res) {
   try {
     const { id_user, name, username, bio } = req.body;
-
     // Check if a file was uploaded
+    if (!id_user) {
+      return responseMessage(res, 400, "user not found", false)
+    }
+    
     if (!req.file) {
       await user.update({ name, username, bio }, { where: { id: id_user } });
       responseMessage(res, 200, "User updated successfully", false);
     } else {
-      // File uploaded
+      
       const file = req.file;
       const fileName = `${Date.now()}_${file.originalname}`;
 
-      // Create a writable stream to upload the file to Google Cloud Storage
       const fileStream = bucket.file(fileName).createWriteStream({
         metadata: {
           contentType: file.mimetype,
@@ -93,16 +94,14 @@ async function updateUser(req, res) {
       fileStream.on("finish", async () => {
         const profil_url = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
 
-        // Update user with the new profile URL
         await user.update(
-          { name, username, bio, profil_url },
+          { name:name, username:username, bio:bio, profile_picture:profil_url },
           { where: { id: id_user } }
         );
 
         responseMessage(res, 200, "User updated successfully", false);
       });
 
-      // Pipe the file buffer into the stream
       fileStream.end(file.buffer);
     }
   } catch (error) {
@@ -247,9 +246,8 @@ async function searchUser(req, res) {
 
     if (usersResult.length > 0) {
       return responseData(res, 200, usersResult, "Success");
-    } else {
-      return responseMessage(res, 404, "User not found");
-    }
+    } 
+    responseMessage(res, 404, "User not found");
   } catch (error) {
     console.error(error);
     return responseMessage(res, 500, "Internal server error");
