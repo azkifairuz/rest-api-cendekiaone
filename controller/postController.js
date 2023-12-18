@@ -1,5 +1,5 @@
 const { post, user, likes, comments, sequelize } = require("../models");
-const { responseMessage, responseData } = require("../utils/responseHandle");
+const { responseMessage, responseData, responseWithPagination } = require("../utils/responseHandle");
 const { Storage } = require("@google-cloud/storage");
 const path = require("path");
 
@@ -197,10 +197,11 @@ async function getAllPost(req, res) {
       totalPosts: count,
     };
 
-    responseData(
+    responseWithPagination(
       res,
       200,
-      { posts: formattedPostings, pagination: paginationInfo },
+      formattedPostings, 
+      paginationInfo ,
       "Success"
     );
   } catch (error) {
@@ -224,17 +225,16 @@ async function getPostById(req, res) {
       },
       where: { id: detail },
     });
-    const postIds = postingans.map((postingan) => postingan.id);
 
     const likeCount = await likes.count({
       where: {
-        id_post: postIds,
+        id_post: detail,
       },
     });
 
     const commentCount = await comments.count({
       where: {
-        id_post: postIds,
+        id_post: detail,
       },
     });
     const formattedPostings = {
@@ -252,7 +252,7 @@ async function getPostById(req, res) {
       createdAt: postingans.created_at,
     };
 
-    responseData(res, 200, formattedPostings, "Success");
+    responseData(res, 200, formattedPostings, 0,"Success");
   } catch (error) {
     responseMessage(res, 500, `Internal server error${error}`);
   }
@@ -279,6 +279,54 @@ async function likePost(req, res) {
   } catch (error) {
     return responseMessage(res, 500, `${error}`);
   }
+}
+
+ 
+async function getLikedUsers(req, res){
+    const { id } = req.params
+    const page = req.query.page || 1;
+    const pageSize = 10;
+    try {
+      const {count, rows: users } = await likes.findAndCountAll({
+        include:[
+          {
+            model: user,
+            attributes: ["username","profile_picture"],
+            as: "likedByUser"
+          }
+        ],
+        where:{
+          id:id,
+        },
+        limit: pageSize,
+        offset: (page - 1 ) * pageSize
+      })
+
+      const totalPages = Math.ceil(count / pageSize);
+
+      const formattedLikes = users.map((likeBy) => {
+        return {
+          id:likeBy.id,
+          username: likeBy.likedByUser.username,
+          profilePicture: likeBy.likedByUser.profile_picture
+        }
+      })
+      const paginationInfo = {
+        currentPage: page,
+        totalPages: totalPages,
+        totalPosts: count,
+      };
+
+      responseWithPagination(
+        res,
+        200,
+        formattedLikes, 
+        paginationInfo ,
+        "Success"
+      );
+    } catch (error) {
+      responseMessage(res, 200, `${error}`, true);
+    }
 }
 
 async function commentPost(req, res) {
@@ -323,14 +371,14 @@ async function commentPost(req, res) {
 }
 
 async function deletePost(req, res) {
-  const { post_id } = req.params;
-
+  const { id } = req.params;
   try {
     const deleteReturn = await post.destroy({
       where: {
-        id: post_id,
+        id: id,
       },
     });
+
     if (!deleteReturn) {
       responseMessage(res, 404, "post not found", false);
     }
@@ -347,4 +395,5 @@ module.exports = {
   likePost,
   commentPost,
   deletePost,
+  getLikedUsers
 };
