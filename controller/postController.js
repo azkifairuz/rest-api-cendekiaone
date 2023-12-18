@@ -177,7 +177,7 @@ async function getAllPost(req, res) {
       const idPost = postingan.id;
       return {
         idPost,
-        createBy: postingan.createdByUser.name,
+        createBy: postingan.createdByUser.username,
         postPicture: postingan.image_url,
         description: postingan.body,
         category: postingan.categories,
@@ -239,7 +239,7 @@ async function getPostById(req, res) {
     });
     const formattedPostings = {
       idPost: postingans.id,
-      createBy: postingans.createdByUser.name,
+      createBy: postingans.createdByUser.username,
       postPicture: postingans.image_url,
       description: postingans.body,
       category: postingans.categories,
@@ -281,7 +281,6 @@ async function likePost(req, res) {
   }
 }
 
- 
 async function getLikedUsers(req, res){
     const { id } = req.params
     const page = req.query.page || 1;
@@ -434,6 +433,8 @@ async function deletePost(req, res) {
     responseMessage(res, 200, `${error}`, true);
   }
 }
+
+
 
 module.exports = {
   posted,

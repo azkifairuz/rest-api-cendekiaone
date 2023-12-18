@@ -67,7 +67,7 @@ async function getUserById(req, res) {
 async function updateUser(req, res) {
   try {
     const { id_user, name, username, bio } = req.body;
-    // Check if a file was uploaded
+    
     if (!id_user) {
       return responseMessage(res, 400, "user not found", false)
     }
