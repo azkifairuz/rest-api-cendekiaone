@@ -370,6 +370,53 @@ async function commentPost(req, res) {
   }
 }
 
+async function getCommentedUser(req, res){
+  const { id } = req.params
+  const page = req.query.page || 1;
+  const pageSize = 10;
+  try {
+    const {count, rows: users } = await comments.findAndCountAll({
+      include:[
+        {
+          model: user,
+          attributes: ["username","profile_picture"],
+          as: "commentByUser"
+        }
+      ],
+      where:{
+        id:id,
+      },
+      limit: pageSize,
+      offset: (page - 1 ) * pageSize
+    })
+
+    const totalPages = Math.ceil(count / pageSize);
+
+    const formattedComments = users.map((comentBy) => {
+      return {
+        id:comentBy.id,
+        username: comentBy.commentByUser.username,
+        profilePicture: comentBy.commentByUser.profile_picture
+      }
+    })
+    const paginationInfo = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalPosts: count,
+    };
+
+    responseWithPagination(
+      res,
+      200,
+      formattedComments, 
+      paginationInfo ,
+      "Success"
+    );
+  } catch (error) {
+    responseMessage(res, 200, `${error}`, true);
+  }
+}
+
 async function deletePost(req, res) {
   const { id } = req.params;
   try {
@@ -395,5 +442,6 @@ module.exports = {
   likePost,
   commentPost,
   deletePost,
-  getLikedUsers
+  getLikedUsers,
+  getCommentedUser
 };
