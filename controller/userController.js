@@ -4,7 +4,7 @@ const { Storage } = require("@google-cloud/storage");
 const path = require('path')
 // Initialize Google Cloud Storage
 const storage = new Storage({
-  keyFilename: path.join(__dirname,'../usman-project-404306-f6a7db49c320.json'),
+  keyFilename: path.join(__dirname,'../config/usman-project-404306-f6a7db49c320.json'),
   projectId: "usman-project-404306",
 });
 

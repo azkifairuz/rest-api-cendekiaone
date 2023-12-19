@@ -6,7 +6,7 @@ const path = require("path");
 const storage = new Storage({
   keyFilename: path.join(
     __dirname,
-    "../usman-project-404306-f6a7db49c320.json"
+    "../config/usman-project-404306-f6a7db49c320.json"
   ),
   projectId: "usman-project-404306",
 });
@@ -179,7 +179,7 @@ async function getAllPost(req, res) {
         idPost,
         createBy: postingan.createdByUser.username,
         postPicture: postingan.image_url,
-        description: postingan.body,
+        body: postingan.post_body,
         category: postingan.categories,
         subCatergory: postingan.sub_categories,
         likes: likesMap[idPost] || 0,
@@ -241,7 +241,7 @@ async function getPostById(req, res) {
       idPost: postingans.id,
       createBy: postingans.createdByUser.username,
       postPicture: postingans.image_url,
-      description: postingans.body,
+      body: postingans.post_body,
       category: postingans.categories,
       subCatergory: postingans.sub_categories,
       likes: likeCount || 0,
