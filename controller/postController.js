@@ -212,6 +212,9 @@ async function getAllPost(req, res) {
 async function getPostById(req, res) {
   try {
     const { detail } = req.params;
+    if (!detail) {
+      return responseMessage(res,404,"required id post",true)
+    }
     const postingans = await post.findOne({
       include: [
         {
@@ -225,7 +228,9 @@ async function getPostById(req, res) {
       },
       where: { id: detail },
     });
-
+    if (!postingans) {
+      return responseMessage(res,404,"id_post not found",true)
+    }
     const likeCount = await likes.count({
       where: {
         id_post: detail,
