@@ -1,5 +1,16 @@
-const { post, user, likes, comments, sequelize } = require("../models");
-const { responseMessage, responseData, responseWithPagination } = require("../utils/responseHandle");
+const {
+  post,
+  user,
+  likes,
+  comments,
+  sequelize,
+  following,
+} = require("../models");
+const {
+  responseMessage,
+  responseData,
+  responseWithPagination,
+} = require("../utils/responseHandle");
 const { Storage } = require("@google-cloud/storage");
 const path = require("path");
 
@@ -19,7 +30,7 @@ async function posted(req, res) {
       req.body;
 
     if (!id_user) {
-      return responseMessage(res, 201, "Cannot create post before login", true);
+      return responseMessage(res, 400, "Cannot create post before login", true);
     }
     // if (!req.file) {
     //   const postReturn = await post.create({
@@ -60,7 +71,9 @@ async function posted(req, res) {
     //   };
     //   return responseMessage(res, 201, formattedResponse, false);
     // }
-
+    if (!req.file) {
+      return responseMessage(res, 400, "image required", true);
+    }
     const image = req.file;
     const imageName = `${Date.now()}_${image.originalname}`;
 
@@ -102,25 +115,82 @@ async function posted(req, res) {
         data: {
           idPost: createdPost.id,
           createBy: createdPost.createdByUser.username,
+          profileCreator: createdPost.createdByUser.profile_picture,
           postPicture: createdPost.image_url,
-          description: createdPost.post_body,
+          postTitle: createdPost.post_title,
+          postBody: createdPost.post_body,
           category: createdPost.categories,
           subCatergory: createdPost.sub_categories,
           likes: 0,
           comments: 0,
-          following: false,
-          saved: false,
-          summary: false,
           createdAt: createdPost.createdAt,
         },
       };
 
-     responseMessage(res, 201, formattedResponse, false);
+      responseMessage(res, 201, formattedResponse, false);
     });
     fileStream.end(image.buffer);
   } catch (error) {
     console.error(error);
-    responseMessage(res, 500, "Internal server error");
+    responseMessage(res, 500, `${error}`);
+  }
+}
+
+async function editPost(req, res) {
+  try {
+    const {
+      id_post,
+      post_title,
+      post_body,
+      id_user,
+      categories,
+      sub_categories,
+    } = req.body;
+
+    if (!id_user) {
+      return responseMessage(res, 201, "Cannot create post before login", true);
+    }
+
+    const postReturn = await post.update(
+      {
+        post_title: post_title,
+        post_body: post_body,
+        id_user: id_user,
+        categories: categories,
+        sub_categories: sub_categories,
+      },
+      { where: { id: id_post } }
+    );
+
+    const createdPost = await post.findByPk(id_post, {
+      include: [
+        {
+          model: user,
+          attributes: ["username"],
+          as: "createdByUser",
+        },
+      ],
+    });
+    const formattedResponse = {
+      status: "Post Updated",
+      data: {
+        idPost: id_post,
+        createBy: createdPost.createdByUser.username,
+        profileCreator: createdPost.createdByUser.profile_picture,
+        postTitle: createdPost.post_title,
+        postBody: createdPost.post_body,
+        category: createdPost.categories,
+        subCatergory: createdPost.sub_categories,
+        likes: 0,
+        comments: 0,
+        createdAt: createdPost.createdAt,
+      },
+    };
+
+    responseMessage(res, 201, formattedResponse, false);
+  } catch (error) {
+    console.error(error);
+    responseMessage(res, 500, `Internal server error ${error}`);
   }
 }
 
@@ -178,15 +248,14 @@ async function getAllPost(req, res) {
       return {
         idPost,
         createBy: postingan.createdByUser.username,
+        profileCreator: postingan.createdByUser.profile_picture,
         postPicture: postingan.image_url,
-        body: postingan.post_body,
+        postTitle: postingan.post_title,
+        postBody: postingan.post_body,
         category: postingan.categories,
         subCatergory: postingan.sub_categories,
         likes: likesMap[idPost] || 0,
         comment: commentCount || 0,
-        following: postingan.following === "true",
-        saved: postingan.saved === "true",
-        summary: postingan.summary === "true",
         createdAt: postingan.created_at,
       };
     });
@@ -200,8 +269,105 @@ async function getAllPost(req, res) {
     responseWithPagination(
       res,
       200,
-      formattedPostings, 
-      paginationInfo ,
+      formattedPostings,
+      paginationInfo,
+      "Success"
+    );
+  } catch (error) {
+    responseMessage(res, 500, `Internal server error ${error}`);
+  }
+}
+
+async function getFollowedPosts(req, res) {
+  const page = req.query.page || 1;
+  const pageSize = 10;
+  const { userId } = req.params;
+  console.log(userId);
+  try {
+    const followedUsers = await following.findAll({
+      where: {
+        account_owner: userId,
+      },
+    });
+    console.log(followedUsers);
+    const followedUserIds = followedUsers.map((user) => user.following_user);
+
+    const { count, rows: postingans } = await post.findAndCountAll({
+      include: [
+        {
+          model: user,
+          attributes: ["name", "username", "profile_picture"],
+          as: "createdByUser",
+        },
+      ],
+      attributes: {
+        exclude: ["id_user"],
+      },
+      where: {
+        id_user: followedUserIds,
+      },
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
+
+    const totalPages = Math.ceil(count / pageSize);
+
+    const postIds = postingans.map((postingan) => postingan.id);
+
+    const likesCount = await likes.findAll({
+      attributes: [
+        "id_post",
+        [
+          sequelize.fn("COUNT", sequelize.literal("DISTINCT liked_by_user")),
+          "likeCount",
+        ],
+      ],
+      where: {
+        id_post: postIds,
+      },
+      group: ["id_post"],
+    });
+
+    const commentCount = await comments.count({
+      where: {
+        id_post: postIds,
+      },
+    });
+
+    const likesMap = {};
+
+    likesCount.forEach((like) => {
+      likesMap[like.id_post] = like.dataValues.likeCount;
+    });
+
+    const formattedPostings = postingans.map((postingan) => {
+      const idPost = postingan.id;
+      return {
+        idPost,
+        createBy: postingan.createdByUser.username,
+        profileCreator: postingan.createdByUser.profile_picture,
+        postPicture: postingan.image_url,
+        postTitle: postingan.post_title,
+        postBody: postingan.post_body,
+        category: postingan.categories,
+        subCatergory: postingan.sub_categories,
+        likes: likesMap[idPost] || 0,
+        comment: commentCount || 0,
+        createdAt: postingan.created_at,
+      };
+    });
+
+    const paginationInfo = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalPosts: count,
+    };
+
+    responseWithPagination(
+      res,
+      200,
+      formattedPostings,
+      paginationInfo,
       "Success"
     );
   } catch (error) {
@@ -213,7 +379,7 @@ async function getPostById(req, res) {
   try {
     const { detail } = req.params;
     if (!detail) {
-      return responseMessage(res,404,"required id post",true)
+      return responseMessage(res, 404, "required id post", true);
     }
     const postingans = await post.findOne({
       include: [
@@ -229,7 +395,7 @@ async function getPostById(req, res) {
       where: { id: detail },
     });
     if (!postingans) {
-      return responseMessage(res,404,"id_post not found",true)
+      return responseMessage(res, 404, "id_post not found", true);
     }
     const likeCount = await likes.count({
       where: {
@@ -245,19 +411,18 @@ async function getPostById(req, res) {
     const formattedPostings = {
       idPost: postingans.id,
       createBy: postingans.createdByUser.username,
+      profileCreator: postingans.createdByUser.profile_picture,
       postPicture: postingans.image_url,
-      body: postingans.post_body,
+      postTitle: postingans.post_title,
+      postBody: postingans.post_body,
       category: postingans.categories,
       subCatergory: postingans.sub_categories,
       likes: likeCount || 0,
       comments: commentCount || 0,
-      following: postingans.following === "true",
-      saved: postingans.saved === "true",
-      summary: postingans.summary === "true",
       createdAt: postingans.created_at,
     };
 
-    responseData(res, 200, formattedPostings, 0,"Success");
+    responseData(res, 200, formattedPostings, 0, "Success");
   } catch (error) {
     responseMessage(res, 500, `Internal server error${error}`);
   }
@@ -286,51 +451,45 @@ async function likePost(req, res) {
   }
 }
 
-async function getLikedUsers(req, res){
-    const { id } = req.params
-    const page = req.query.page || 1;
-    const pageSize = 10;
-    try {
-      const {count, rows: users } = await likes.findAndCountAll({
-        include:[
-          {
-            model: user,
-            attributes: ["username","profile_picture"],
-            as: "likedByUser"
-          }
-        ],
-        where:{
-          id:id,
+async function getLikedUsers(req, res) {
+  const { id } = req.params;
+  const page = req.query.page || 1;
+  const pageSize = 10;
+  try {
+    const { count, rows: users } = await likes.findAndCountAll({
+      include: [
+        {
+          model: user,
+          attributes: ["username", "profile_picture"],
+          as: "likedByUser",
         },
-        limit: pageSize,
-        offset: (page - 1 ) * pageSize
-      })
+      ],
+      where: {
+        id: id,
+      },
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
 
-      const totalPages = Math.ceil(count / pageSize);
+    const totalPages = Math.ceil(count / pageSize);
 
-      const formattedLikes = users.map((likeBy) => {
-        return {
-          id:likeBy.id,
-          username: likeBy.likedByUser.username,
-          profilePicture: likeBy.likedByUser.profile_picture
-        }
-      })
-      const paginationInfo = {
-        currentPage: page,
-        totalPages: totalPages,
-        totalPosts: count,
+    const formattedLikes = users.map((likeBy) => {
+      return {
+        id: likeBy.id,
+        username: likeBy.likedByUser.username,
+        profilePicture: likeBy.likedByUser.profile_picture,
       };
+    });
+    const paginationInfo = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalPosts: count,
+    };
 
-      responseWithPagination(
-        res,
-        200,
-        formattedLikes, 
-        paginationInfo ,
-        "Success"
-      );
-    } catch (error) {
-      responseMessage(res, 200, `${error}`, true);
-    }
+    responseWithPagination(res, 200, formattedLikes, paginationInfo, "Success");
+  } catch (error) {
+    responseMessage(res, 200, `${error}`, true);
+  }
 }
 
 async function commentPost(req, res) {
@@ -374,35 +533,35 @@ async function commentPost(req, res) {
   }
 }
 
-async function getCommentedUser(req, res){
-  const { id } = req.params
+async function getCommentedUser(req, res) {
+  const { id } = req.params;
   const page = req.query.page || 1;
   const pageSize = 10;
   try {
-    const {count, rows: users } = await comments.findAndCountAll({
-      include:[
+    const { count, rows: users } = await comments.findAndCountAll({
+      include: [
         {
           model: user,
-          attributes: ["username","profile_picture"],
-          as: "commentByUser"
-        }
+          attributes: ["username", "profile_picture"],
+          as: "commentByUser",
+        },
       ],
-      where:{
-        id:id,
+      where: {
+        id: id,
       },
       limit: pageSize,
-      offset: (page - 1 ) * pageSize
-    })
+      offset: (page - 1) * pageSize,
+    });
 
     const totalPages = Math.ceil(count / pageSize);
 
     const formattedComments = users.map((comentBy) => {
       return {
-        id:comentBy.id,
+        id: comentBy.id,
         username: comentBy.commentByUser.username,
-        profilePicture: comentBy.commentByUser.profile_picture
-      }
-    })
+        profilePicture: comentBy.commentByUser.profile_picture,
+      };
+    });
     const paginationInfo = {
       currentPage: page,
       totalPages: totalPages,
@@ -412,8 +571,8 @@ async function getCommentedUser(req, res){
     responseWithPagination(
       res,
       200,
-      formattedComments, 
-      paginationInfo ,
+      formattedComments,
+      paginationInfo,
       "Success"
     );
   } catch (error) {
@@ -439,8 +598,6 @@ async function deletePost(req, res) {
   }
 }
 
-
-
 module.exports = {
   posted,
   getAllPost,
@@ -449,5 +606,7 @@ module.exports = {
   commentPost,
   deletePost,
   getLikedUsers,
-  getCommentedUser
+  getCommentedUser,
+  getFollowedPosts,
+  editPost,
 };
