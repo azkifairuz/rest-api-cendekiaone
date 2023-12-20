@@ -8,6 +8,7 @@ const multerUpload = multer({ storage: multerStorage });
 
 router.get("/posts", postController.getAllPost);
 router.get("/post/:detail", postController.getPostById);
+router.get("/mypost/:userId", postController.getPostByidUser);
 router.post("/post", multerUpload.single('postImage'), postController.posted);
 router.post("/edit-post",postController.editPost);
 router.get("/followed-post/:userId", postController.getFollowedPosts);

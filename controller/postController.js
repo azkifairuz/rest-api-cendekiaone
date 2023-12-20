@@ -6,6 +6,7 @@ const {
   sequelize,
   following,
 } = require("../models");
+
 const {
   responseMessage,
   responseData,
@@ -32,45 +33,7 @@ async function posted(req, res) {
     if (!id_user) {
       return responseMessage(res, 400, "Cannot create post before login", true);
     }
-    // if (!req.file) {
-    //   const postReturn = await post.create({
-    //     post_title,
-    //     post_body,
-    //     id_user,
-    //     image_url,
-    //     categories,
-    //     sub_categories,
-    //   });
 
-    //   const createdPost = await post.findByPk(postReturn.id, {
-    //     include: [
-    //       {
-    //         model: user,
-    //         attributes: ["username"],
-    //         as: "createdByUser",
-    //       },
-    //     ],
-    //   });
-
-    //   const formattedResponse = {
-    //     status: "Post Created",
-    //     data: {
-    //       idPost: createdPost.id,
-    //       createBy: createdPost.createdByUser.username,
-    //       postPicture: createdPost.image_url,
-    //       description: createdPost.post_body,
-    //       category: createdPost.categories,
-    //       subCatergory: createdPost.sub_categories,
-    //       likes: 0,
-    //       comments: 0,
-    //       following: false,
-    //       saved: false,
-    //       summary: false,
-    //       createdAt: createdPost.createdAt,
-    //     },
-    //   };
-    //   return responseMessage(res, 201, formattedResponse, false);
-    // }
     if (!req.file) {
       return responseMessage(res, 400, "image required", true);
     }
@@ -129,6 +92,7 @@ async function posted(req, res) {
 
       responseMessage(res, 201, formattedResponse, false);
     });
+
     fileStream.end(image.buffer);
   } catch (error) {
     console.error(error);
@@ -151,7 +115,7 @@ async function editPost(req, res) {
       return responseMessage(res, 201, "Cannot create post before login", true);
     }
 
-    const postReturn = await post.update(
+    await post.update(
       {
         post_title: post_title,
         post_body: post_body,
@@ -278,18 +242,105 @@ async function getAllPost(req, res) {
   }
 }
 
+async function getPostByidUser(req, res) {
+  const page = req.query.page || 1;
+  const pageSize = 10;
+  const { userId } = req.params;
+  try {
+    const { count, rows: postingans } = await post.findAndCountAll({
+      include: [
+        {
+          model: user,
+          attributes: ["name", "username", "profile_picture"],
+          as: "createdByUser",
+        },
+      ],
+      attributes: {
+        exclude: ["id_user"],
+      },
+      where: {
+        id_user: userId,
+      },
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
+
+    const totalPages = Math.ceil(count / pageSize);
+
+    const postIds = postingans.map((postingan) => postingan.id);
+
+    const likesCount = await likes.findAll({
+      attributes: [
+        "id_post",
+        [
+          sequelize.fn("COUNT", sequelize.literal("DISTINCT liked_by_user")),
+          "likeCount",
+        ],
+      ],
+      where: {
+        id_post: postIds,
+      },
+      group: ["id_post"],
+    });
+
+    const commentCount = await comments.count({
+      where: {
+        id_post: postIds,
+      },
+    });
+
+    const likesMap = {};
+
+    likesCount.forEach((like) => {
+      likesMap[like.id_post] = like.dataValues.likeCount;
+    });
+
+    const formattedPostings = postingans.map((postingan) => {
+      const idPost = postingan.id;
+      return {
+        idPost,
+        createBy: postingan.createdByUser.username,
+        profileCreator: postingan.createdByUser.profile_picture,
+        postPicture: postingan.image_url,
+        postTitle: postingan.post_title,
+        postBody: postingan.post_body,
+        category: postingan.categories,
+        subCatergory: postingan.sub_categories,
+        likes: likesMap[idPost] || 0,
+        comment: commentCount || 0,
+        createdAt: postingan.created_at,
+      };
+    });
+
+    const paginationInfo = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalPosts: count,
+    };
+
+    responseWithPagination(
+      res,
+      200,
+      formattedPostings,
+      paginationInfo,
+      "Success"
+    );
+  } catch (error) {
+    responseMessage(res, 500, `Internal server error ${error}`);
+  }
+}
+
+const { Op } = require("sequelize");
 async function getFollowedPosts(req, res) {
   const page = req.query.page || 1;
   const pageSize = 10;
   const { userId } = req.params;
-  console.log(userId);
   try {
     const followedUsers = await following.findAll({
       where: {
         account_owner: userId,
       },
     });
-    console.log(followedUsers);
     const followedUserIds = followedUsers.map((user) => user.following_user);
 
     const { count, rows: postingans } = await post.findAndCountAll({
@@ -304,7 +355,7 @@ async function getFollowedPosts(req, res) {
         exclude: ["id_user"],
       },
       where: {
-        id_user: followedUserIds,
+        [Op.or]: [{ id_user: followedUserIds }, { id_user: userId }],
       },
       limit: pageSize,
       offset: (page - 1) * pageSize,
@@ -547,7 +598,7 @@ async function getCommentedUser(req, res) {
         },
       ],
       where: {
-        id: id,
+        id_post: id,
       },
       limit: pageSize,
       offset: (page - 1) * pageSize,
@@ -558,6 +609,7 @@ async function getCommentedUser(req, res) {
     const formattedComments = users.map((comentBy) => {
       return {
         id: comentBy.id,
+        comment_body: comentBy.comment_body,
         username: comentBy.commentByUser.username,
         profilePicture: comentBy.commentByUser.profile_picture,
       };
@@ -609,4 +661,5 @@ module.exports = {
   getCommentedUser,
   getFollowedPosts,
   editPost,
+  getPostByidUser,
 };
