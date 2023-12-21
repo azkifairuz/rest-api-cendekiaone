@@ -6,7 +6,7 @@ const multerStorage = multer.memoryStorage();
 const multerUpload = multer({ storage: multerStorage });
 
 router.get("/users", userController.getUser);
-router.get("/myprofile/:id", userController.profilePicture);
+router.get("/myprofile/:id", userController.myProfile);
 router.get("/user/:id/:userId", userController.getUserById);
 router.post("/update-profile", multerUpload.single('profileImage'), userController.updateUser);
 router.post("/follow", userController.follow);

@@ -1,10 +1,13 @@
 const { user, following, follower, sequelize, post } = require("../models");
 const { responseMessage, responseData } = require("../utils/responseHandle");
 const { Storage } = require("@google-cloud/storage");
-const path = require('path')
+const path = require("path");
 // Initialize Google Cloud Storage
 const storage = new Storage({
-  keyFilename: path.join(__dirname,'../config/usman-project-404306-f6a7db49c320.json'),
+  keyFilename: path.join(
+    __dirname,
+    "../config/usman-project-404306-f6a7db49c320.json"
+  ),
   projectId: "usman-project-404306",
 });
 
@@ -19,7 +22,7 @@ async function getUser(req, res) {
   }
 }
 
-async function profilePicture(req, res) {
+async function myProfile(req, res) {
   try {
     const { id } = req.params;
 
@@ -49,14 +52,14 @@ async function profilePicture(req, res) {
 
     const formattedData = {
       id: userResult.id,
-      name:userResult.name,
-      username:userResult.username,
-      bio:userResult.bio,
-      follower:jumlahFollower,
-      following:jumlahFollowing,
-      post:jumlahPost,
-      profile_picture:userResult.profile_picture,
-    }
+      name: userResult.name,
+      username: userResult.username,
+      bio: userResult.bio,
+      follower: jumlahFollower,
+      following: jumlahFollowing,
+      post: jumlahPost,
+      profile_picture: userResult.profile_picture,
+    };
 
     responseData(res, 200, formattedData, "success");
   } catch (error) {
@@ -118,20 +121,18 @@ async function getUserById(req, res) {
   }
 }
 
-
 async function updateUser(req, res) {
   try {
     const { id_user, name, username, bio } = req.body;
-    
+
     if (!id_user) {
-      return responseMessage(res, 400, "user not found", false)
+      return responseMessage(res, 400, "user not found", false);
     }
-    
+
     if (!req.file) {
       await user.update({ name, username, bio }, { where: { id: id_user } });
       responseMessage(res, 200, "User updated successfully", false);
     } else {
-      
       const file = req.file;
       const fileName = `${Date.now()}_${file.originalname}`;
 
@@ -150,7 +151,12 @@ async function updateUser(req, res) {
         const profil_url = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
 
         await user.update(
-          { name:name, username:username, bio:bio, profile_picture:profil_url },
+          {
+            name: name,
+            username: username,
+            bio: bio,
+            profile_picture: profil_url,
+          },
           { where: { id: id_user } }
         );
 
@@ -181,15 +187,23 @@ async function follow(req, res) {
     });
 
     if (isAlreadyFollow) {
-      await following.destroy({
-        where:[{ following_user: followed_user},{ account_owner: account_owner}]
-      },
-      { transaction: t }
+      await following.destroy(
+        {
+          where: [
+            { following_user: followed_user },
+            { account_owner: account_owner },
+          ],
+        },
+        { transaction: t }
       );
-      await follower.destroy({
-        where:[{  followers: account_owner},{  account_owner: followed_user}]
-      },
-      { transaction: t }
+      await follower.destroy(
+        {
+          where: [
+            { followers: account_owner },
+            { account_owner: followed_user },
+          ],
+        },
+        { transaction: t }
       );
       return responseMessage(res, 400, " unfollow this user");
     }
@@ -228,7 +242,7 @@ async function getFollowing(req, res) {
         {
           model: user,
           as: "followingsDetails",
-          attributes: ["id", "name", "username","profile_picture"],
+          attributes: ["id", "name", "username", "profile_picture"],
         },
         {
           model: user,
@@ -270,7 +284,7 @@ async function getFollowers(req, res) {
         {
           model: user,
           as: "followerDetails",
-          attributes: ["id", "name", "username","profile_picture"],
+          attributes: ["id", "name", "username", "profile_picture"],
         },
         {
           model: user,
@@ -314,7 +328,7 @@ async function searchUser(req, res) {
 
     if (usersResult.length > 0) {
       return responseData(res, 200, usersResult, "Success");
-    } 
+    }
     responseMessage(res, 404, "User not found");
   } catch (error) {
     console.error(error);
@@ -325,7 +339,7 @@ async function searchUser(req, res) {
 module.exports = {
   getUser,
   updateUser,
-  profilePicture,
+  myProfile,
   getUserById,
   follow,
   getFollowers,
