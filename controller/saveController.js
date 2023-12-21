@@ -54,7 +54,7 @@ async function getSavePost(req, res) {
         {
           model: post,
           attributes: [
-            ["id", "idPost"],
+            "id",
             "post_title",
             "post_body",
             ["id_user", "createdBy"],
@@ -82,8 +82,8 @@ async function getSavePost(req, res) {
 
     const totalPages = Math.ceil(count / pageSize);
     const postIds = savedPosts.map((postingan) => {
-      if (postingan.savedPost && postingan.savedPost.idPost) {
-        return postingan.savedPost.idPost;
+      if (postingan.savedPost && postingan.savedPost.id) {
+        return postingan.savedPost.id;
       } else {
         return null; // or any default value you prefer
       }
@@ -119,12 +119,13 @@ async function getSavePost(req, res) {
     });
 
     const formattedPostings = savedPosts
-    .filter((postingan) => postingan.savedPost && postingan.savedPost.idPost !== null)
+    .filter((postingan) => postingan.savedPost && postingan.savedPost.id !== null)
     .map((postingan) => {
-      const idPost = postingan.savedPost.idPost ;
+      const idPost = postingan.savedPost.id ;
       return {
-        idPost,
+        idPost: idPost,
         createBy: postingan.savedPost.createdByUser.username,
+        createById: postingan.savedPost.createdByUser.id,
         savedBy: postingan.savedByUser.username,
         postPicture: postingan.savedPost.image_url,
         postTitle: postingan.savedPost.post_title,
