@@ -19,7 +19,7 @@ async function getUser(req, res) {
   }
 }
 
-async function getUserById(req, res) {
+async function profilePicture(req, res) {
   try {
     const { id } = req.params;
 
@@ -63,6 +63,61 @@ async function getUserById(req, res) {
     responseMessage(res, 404, `failed get user ${error}`);
   }
 }
+
+async function getUserById(req, res) {
+  try {
+    const { id } = req.params;
+
+    const userResult = await user.findOne({ where: { id: id } });
+
+    if (!userResult) {
+      return responseMessage(res, 404, `User not found`);
+    }
+
+    const jumlahPost = await post.count({
+      where: {
+        id_user: id,
+      },
+    });
+
+    const jumlahFollower = await follower.count({
+      where: {
+        account_owner: id,
+      },
+    });
+
+    const jumlahFollowing = await following.count({
+      where: {
+        account_owner: id,
+      },
+    });
+
+    // Cek apakah pengguna saat ini mengikuti pengguna yang ditampilkan
+    const isFollowedThisUser = await follower.findOne({
+      where: {
+        followers: req.params.userId,
+        account_owner: id,
+      },
+    });
+
+    const formattedData = {
+      id: userResult.id,
+      name: userResult.name,
+      username: userResult.username,
+      bio: userResult.bio,
+      follower: jumlahFollower,
+      following: jumlahFollowing,
+      post: jumlahPost,
+      profile_picture: userResult.profile_picture,
+      isFollowedThisUser: Boolean(isFollowedThisUser), // Convert to boolean
+    };
+
+    responseData(res, 200, formattedData, "Success");
+  } catch (error) {
+    responseMessage(res, 500, `Failed to get user ${error}`);
+  }
+}
+
 
 async function updateUser(req, res) {
   try {
@@ -173,7 +228,7 @@ async function getFollowing(req, res) {
         {
           model: user,
           as: "followingsDetails",
-          attributes: ["id", "name", "username","profil_picture"],
+          attributes: ["id", "name", "username","profile_picture"],
         },
         {
           model: user,
@@ -199,7 +254,7 @@ async function getFollowing(req, res) {
     return responseData(res, 200, data, "Success");
   } catch (error) {
     console.error(error);
-    return responseMessage(res, 500, "Internal server error");
+    return responseMessage(res, 500, `${error}`);
   }
 }
 
@@ -270,6 +325,7 @@ async function searchUser(req, res) {
 module.exports = {
   getUser,
   updateUser,
+  profilePicture,
   getUserById,
   follow,
   getFollowers,
