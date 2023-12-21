@@ -19,7 +19,10 @@ async function savePost(req, res) {
       where: [{ id_posts: id_post }, { saved_by_user: saved_by }],
     });
     if (isAlreadySave) {
-      return responseMessage(res, 400, "post already save");
+      await saved.destroy({
+        where:[{ id_post: id_post},{saved_by_user: saved_by}]
+      });
+      return responseMessage(res, 400, "post unsaved");
     }
     const returnSave = saved.create({
       id_posts: id_post,
@@ -78,9 +81,17 @@ async function getSavePost(req, res) {
     });
 
     const totalPages = Math.ceil(count / pageSize);
-
-    const postIds = savedPosts.map((postingan) => postingan.savedPost.idPost);
-
+    const postIds = savedPosts.map((postingan) => {
+      if (postingan.savedPost && postingan.savedPost.idPost) {
+        return postingan.savedPost.idPost;
+      } else {
+        return null; // or any default value you prefer
+      }
+    });
+    
+    // Filter out null values from postIds
+    const validPostIds = postIds.filter((postId) => postId !== null);
+    
     const likesCount = await likes.findAll({
       attributes: [
         "id_post",
@@ -90,14 +101,14 @@ async function getSavePost(req, res) {
         ],
       ],
       where: {
-        id_post: postIds,
+        id_post: validPostIds, // Use the filtered postIds
       },
       group: ["id_post"],
     });
 
     const commentCount = await comments.count({
       where: {
-        id_post: postIds,
+        id_post: validPostIds,
       },
     });
 
@@ -107,8 +118,10 @@ async function getSavePost(req, res) {
       likesMap[like.id_post] = like.dataValues.likeCount;
     });
 
-    const formattedPostings = savedPosts.map((postingan) => {
-      const idPost = postingan.savedPost.idPost;
+    const formattedPostings = savedPosts
+    .filter((postingan) => postingan.savedPost && postingan.savedPost.idPost !== null)
+    .map((postingan) => {
+      const idPost = postingan.savedPost.idPost ;
       return {
         idPost,
         createBy: postingan.savedPost.createdByUser.username,

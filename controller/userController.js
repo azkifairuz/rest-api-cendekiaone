@@ -117,6 +117,7 @@ async function follow(req, res) {
     if (!account_owner || !followed_user) {
       return responseMessage(res, 404, "user cannot empty");
     }
+
     const isAlreadyFollow = await following.findOne({
       where: [
         { following_user: followed_user },
@@ -125,7 +126,17 @@ async function follow(req, res) {
     });
 
     if (isAlreadyFollow) {
-      return responseMessage(res, 400, "already follow this user");
+      await following.destroy({
+        where:[{ following_user: followed_user},{ account_owner: account_owner}]
+      },
+      { transaction: t }
+      );
+      await follower.destroy({
+        where:[{  followers: account_owner},{  account_owner: followed_user}]
+      },
+      { transaction: t }
+      );
+      return responseMessage(res, 400, " unfollow this user");
     }
 
     await following.create(

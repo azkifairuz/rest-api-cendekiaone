@@ -4,6 +4,7 @@ const {
   likes,
   comments,
   sequelize,
+  saved,
   following,
 } = require("../models");
 
@@ -200,7 +201,6 @@ async function getAllPost(req, res) {
         id_post: postIds,
       },
     });
-
     const likesMap = {};
 
     likesCount.forEach((like) => {
@@ -209,9 +209,11 @@ async function getAllPost(req, res) {
 
     const formattedPostings = postingans.map((postingan) => {
       const idPost = postingan.id;
+      
       return {
         idPost,
         createBy: postingan.createdByUser.username,
+        createById: postingan.createdByUser.id,
         profileCreator: postingan.createdByUser.profile_picture,
         postPicture: postingan.image_url,
         postTitle: postingan.post_title,
@@ -221,6 +223,7 @@ async function getAllPost(req, res) {
         likes: likesMap[idPost] || 0,
         comment: commentCount || 0,
         createdAt: postingan.created_at,
+
       };
     });
 
@@ -251,7 +254,7 @@ async function getPostByidUser(req, res) {
       include: [
         {
           model: user,
-          attributes: ["name", "username", "profile_picture"],
+          attributes: ["id", "username", "profile_picture"],
           as: "createdByUser",
         },
       ],
@@ -268,7 +271,19 @@ async function getPostByidUser(req, res) {
     const totalPages = Math.ceil(count / pageSize);
 
     const postIds = postingans.map((postingan) => postingan.id);
-
+    const savedData = await saved.findAll({
+      where: {
+        id_posts: postIds,
+        saved_by_user: userId,
+      },
+    });
+    
+    const likesData = await likes.findAll({
+      where: {
+        id_post: postIds,
+        liked_by_user: userId,
+      },
+    });
     const likesCount = await likes.findAll({
       attributes: [
         "id_post",
@@ -297,9 +312,12 @@ async function getPostByidUser(req, res) {
 
     const formattedPostings = postingans.map((postingan) => {
       const idPost = postingan.id;
+      const isSaved = savedData.some((item) => item.id_posts === idPost);
+      const isLike = likesData.some((item) => item.id_post === idPost);
       return {
         idPost,
         createBy: postingan.createdByUser.username,
+        createById: postingan.createdByUser.id,
         profileCreator: postingan.createdByUser.profile_picture,
         postPicture: postingan.image_url,
         postTitle: postingan.post_title,
@@ -309,6 +327,8 @@ async function getPostByidUser(req, res) {
         likes: likesMap[idPost] || 0,
         comment: commentCount || 0,
         createdAt: postingan.created_at,
+        isLike: isLike,
+        isSaved: isSaved,
       };
     });
 
@@ -347,7 +367,7 @@ async function getFollowedPosts(req, res) {
       include: [
         {
           model: user,
-          attributes: ["name", "username", "profile_picture"],
+          attributes: ["id","name", "username", "profile_picture"],
           as: "createdByUser",
         },
       ],
@@ -360,11 +380,9 @@ async function getFollowedPosts(req, res) {
       limit: pageSize,
       offset: (page - 1) * pageSize,
     });
-
     const totalPages = Math.ceil(count / pageSize);
 
     const postIds = postingans.map((postingan) => postingan.id);
-
     const likesCount = await likes.findAll({
       attributes: [
         "id_post",
@@ -384,6 +402,19 @@ async function getFollowedPosts(req, res) {
         id_post: postIds,
       },
     });
+    const savedData = await saved.findAll({
+      where: {
+        id_posts: postIds,
+        saved_by_user: userId,
+      },
+    });
+    
+    const likesData = await likes.findAll({
+      where: {
+        id_post: postIds,
+        liked_by_user: userId,
+      },
+    });
 
     const likesMap = {};
 
@@ -393,9 +424,12 @@ async function getFollowedPosts(req, res) {
 
     const formattedPostings = postingans.map((postingan) => {
       const idPost = postingan.id;
+      const isSaved = savedData.some((item) => item.id_posts === idPost);
+      const isLike = likesData.some((item) => item.id_post === idPost);
       return {
         idPost,
         createBy: postingan.createdByUser.username,
+        createById: postingan.createdByUser.id,
         profileCreator: postingan.createdByUser.profile_picture,
         postPicture: postingan.image_url,
         postTitle: postingan.post_title,
@@ -405,6 +439,8 @@ async function getFollowedPosts(req, res) {
         likes: likesMap[idPost] || 0,
         comment: commentCount || 0,
         createdAt: postingan.created_at,
+        isLike: isLike,
+        isSaved: isSaved,
       };
     });
 
@@ -432,11 +468,12 @@ async function getPostById(req, res) {
     if (!detail) {
       return responseMessage(res, 404, "required id post", true);
     }
+
     const postingans = await post.findOne({
       include: [
         {
           model: user,
-          attributes: ["name", "username", "profile_picture"],
+          attributes: ["id", "username", "profile_picture"],
           as: "createdByUser",
         },
       ],
@@ -445,9 +482,11 @@ async function getPostById(req, res) {
       },
       where: { id: detail },
     });
+
     if (!postingans) {
       return responseMessage(res, 404, "id_post not found", true);
     }
+
     const likeCount = await likes.count({
       where: {
         id_post: detail,
@@ -459,9 +498,26 @@ async function getPostById(req, res) {
         id_post: detail,
       },
     });
+
+
+    const isSaved = await saved.findOne({
+      where: {
+        id_posts: detail,
+        saved_by_user: req.params.userId, 
+      },
+    });
+
+    const isLike = await likes.findOne({
+      where: {
+        id_post: detail,
+        liked_by_user: req.params.userId, 
+      },
+    });
+
     const formattedPostings = {
       idPost: postingans.id,
       createBy: postingans.createdByUser.username,
+      createById: postingans.createdByUser.id,
       profileCreator: postingans.createdByUser.profile_picture,
       postPicture: postingans.image_url,
       postTitle: postingans.post_title,
@@ -471,6 +527,8 @@ async function getPostById(req, res) {
       likes: likeCount || 0,
       comments: commentCount || 0,
       createdAt: postingans.created_at,
+      isSaved: Boolean(isSaved) || false, 
+      isLike: Boolean(isLike) || false,
     };
 
     responseData(res, 200, formattedPostings, 0, "Success");
@@ -478,6 +536,7 @@ async function getPostById(req, res) {
     responseMessage(res, 500, `Internal server error${error}`);
   }
 }
+
 
 async function likePost(req, res) {
   const { post_id, liked_by } = req.body;
@@ -488,7 +547,10 @@ async function likePost(req, res) {
     });
 
     if (isAlreadyLike) {
-      return responseMessage(res, 400, "already like this post");
+      await likes.destroy({
+        where:[{ id_post: post_id},{liked_by_user: liked_by}]
+      });
+      return responseMessage(res, 400, "already unlike this post");
     }
 
     await likes.create({
@@ -635,6 +697,28 @@ async function getCommentedUser(req, res) {
 async function deletePost(req, res) {
   const { id } = req.params;
   try {
+    // Hapus dari tabel likes
+    await likes.destroy({
+      where: {
+        id_post: id,
+      },
+    });
+
+    // Hapus dari tabel comments
+    await comments.destroy({
+      where: {
+        id_post: id,
+      },
+    });
+
+    // Hapus dari tabel saved
+    await saved.destroy({
+      where: {
+        id_posts: id,
+      },
+    });
+
+    // Hapus dari tabel posts
     const deleteReturn = await post.destroy({
       where: {
         id: id,
@@ -642,13 +726,16 @@ async function deletePost(req, res) {
     });
 
     if (!deleteReturn) {
-      responseMessage(res, 404, "post not found", false);
+      responseMessage(res, 404, "Post not found", false);
+    } else {
+      responseMessage(res, 200, "Delete post success", false);
     }
-    responseMessage(res, 200, "delete post success", false);
   } catch (error) {
-    responseMessage(res, 200, `${error}`, true);
+    responseMessage(res, 500, `${error}`, true);
   }
 }
+
+
 
 module.exports = {
   posted,

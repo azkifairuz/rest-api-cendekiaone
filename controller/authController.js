@@ -1,4 +1,4 @@
-const { user, auth } = require("../models");
+const { user, auth,post } = require("../models");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { responseMessage, responseData } = require("../utils/responseHandle");
@@ -106,6 +106,7 @@ async function deleteAkun(req, res) {
 
     await user.destroy({ where: { id: id_user } });
 
+    await post.destroy({where: {id_user:id_user}})
     responseMessage(res, 200, "Account deleted successfully", false);
   } catch (error) {
     console.error(error);
