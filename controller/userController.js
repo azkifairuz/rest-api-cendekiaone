@@ -173,7 +173,7 @@ async function getFollowing(req, res) {
         {
           model: user,
           as: "followingsDetails",
-          attributes: ["id", "name", "username"],
+          attributes: ["id", "name", "username","profil_picture"],
         },
         {
           model: user,
@@ -191,6 +191,7 @@ async function getFollowing(req, res) {
       following_id: item.following_user,
       following_name: item.followingsDetails.name,
       following_username: item.followingsDetails.username,
+      profile_picture: item.followingsDetails.profile_picture,
       account_owner_name: item.accountOwner.name,
       account_owner_username: item.accountOwner.username,
     }));
@@ -214,7 +215,7 @@ async function getFollowers(req, res) {
         {
           model: user,
           as: "followerDetails",
-          attributes: ["id", "name", "username"],
+          attributes: ["id", "name", "username","profile_picture"],
         },
         {
           model: user,
@@ -230,6 +231,7 @@ async function getFollowers(req, res) {
       id_user: item.account_owner,
       following_id: item.followers,
       follower_name: item.followerDetails.name,
+      profile_picture: item.followerDetails.profile_picture,
       follower_username: item.followerDetails.username,
       account_owner_name: item.accountOwner.name,
       account_owner_username: item.accountOwner.username,

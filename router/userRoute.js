@@ -11,6 +11,6 @@ router.post("/update-profile", multerUpload.single('profileImage'), userControll
 router.post("/follow", userController.follow);
 router.get("/followers/:id", userController.getFollowers);
 router.get("/followings/:id", userController.getFollowing);
-router.get("/search",userController.searchUser)
+router.get("/search",userController.searchUser) 
 
 module.exports = router;  
